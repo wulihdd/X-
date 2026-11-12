@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         X 中文油猴脚本插件
 // @namespace    local.x.zh-cn
-// @version      1.4.7
+// @version      1.4.8
 // @description  将 X 常见英文界面文字显示为简体中文，不翻译用户内容。
 // @author       zihsowuli
 // @homepageURL  https://github.com/wulihdd/X-
 // @supportURL   https://x.com/zihsowuli
-// @downloadURL  https://raw.githubusercontent.com/wulihdd/X-/main/X%20%E4%B8%AD%E6%96%87%E6%B2%B9%E7%8C%B4%E8%84%9A%E6%9C%AC%E6%8F%92%E4%BB%B6.user.js
-// @updateURL    https://raw.githubusercontent.com/wulihdd/X-/main/X%20%E4%B8%AD%E6%96%87%E6%B2%B9%E7%8C%B4%E8%84%9A%E6%9C%AC%E6%8F%92%E4%BB%B6.user.js
+// @downloadURL  https://raw.githubusercontent.com/wulihdd/X-/main/x.user.js
+// @updateURL    https://raw.githubusercontent.com/wulihdd/X-/main/x.user.js
 // @match        https://x.com/*
 // @match        https://twitter.com/*
 // @run-at       document-idle
