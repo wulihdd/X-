@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         X 中文油猴脚本插件
 // @namespace    local.x.zh-cn
-// @version      1.4.8
+// @version      1.4.9
 // @description  将 X 常见英文界面文字显示为简体中文，不翻译用户内容。
 // @author       zihsowuli
 // @homepageURL  https://github.com/wulihdd/X-
@@ -277,6 +277,7 @@
   }
 
   function updateElement(element) {
+    if (element.matches('[data-testid="xchatEmbedRoute"]')) watchChatHost(element);
     // 用 label 而非 textContent 翻译月份，保持未显式设置 value 的 option 原有值。
     if (element.matches('option') && element.closest('[role="dialog"]')) {
       const previous = optionLabels.get(element);
@@ -349,6 +350,84 @@
       if (walker.currentNode.nodeType === Node.TEXT_NODE) updateText(walker.currentNode);
       else updateElement(walker.currentNode);
     }
+  }
+
+  // X 聊天界面位于独立 Shadow DOM，只处理已确认的界面区域。
+  const chatUi = '[data-testid="dm-inbox-header"], [data-testid="dm-empty-conversation-state"], [data-testid="dm-inbox-dropdown-content"], [data-testid="dm-conversation-scroller"] h2, [data-testid^="dm-cold-inbox-suggestion-"] button, [data-testid^="dm-cold-inbox-suggestion-"] .text-secondary';
+  const chatProtected = '[data-testid^="dm-conversation-option-"], [data-testid^="dm-message"], [data-testid="conversation"], [contenteditable="true"], [role="textbox"], textarea';
+  const chatRoots = new WeakSet();
+  const pendingChatHosts = new WeakSet();
+
+  function updateChatElement(element) {
+    if (!element.closest(chatUi) || element.closest(chatProtected)) return;
+    if (element.matches('input')) {
+      if (!element.closest('[data-testid="dm-inbox-header"]')) return;
+      for (const name of ['placeholder', 'aria-label']) {
+        const original = element.getAttribute(name);
+        if (original === 'Search') element.setAttribute(name, '搜索');
+      }
+      return;
+    }
+    for (const name of attributes) {
+      const original = element.getAttribute(name);
+      if (original !== null) {
+        const translated = translate(original);
+        if (translated !== original) element.setAttribute(name, translated);
+      }
+    }
+  }
+
+  function updateChatText(node) {
+    const parent = node.parentElement;
+    if (!parent || !parent.closest(chatUi) || parent.closest(chatProtected)) return;
+    if (parent.closest('[data-testid^="dm-cold-inbox-suggestion-"]') && !parent.closest('button') &&
+        !["You've chatted before", 'You interact a lot on X'].includes(node.nodeValue.trim())) return;
+    const translated = translate(node.nodeValue);
+    if (translated !== node.nodeValue) node.nodeValue = translated;
+  }
+
+  function scanChat(root) {
+    if (root.nodeType === Node.TEXT_NODE) return updateChatText(root);
+    if (root.nodeType !== Node.ELEMENT_NODE && root.nodeType !== Node.DOCUMENT_FRAGMENT_NODE) return;
+    if (root.nodeType === Node.ELEMENT_NODE) updateChatElement(root);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      if (walker.currentNode.nodeType === Node.TEXT_NODE) updateChatText(walker.currentNode);
+      else updateChatElement(walker.currentNode);
+    }
+  }
+
+  const chatObserver = new MutationObserver(records => {
+    for (const record of records) {
+      if (record.type === 'characterData') updateChatText(record.target);
+      else if (record.type === 'attributes') updateChatElement(record.target);
+      else for (const node of record.addedNodes) scanChat(node);
+    }
+  });
+
+  function watchChatHost(host) {
+    const root = host.shadowRoot;
+    if (root) {
+      if (chatRoots.has(root)) return;
+      chatRoots.add(root);
+      chatObserver.observe(root, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: attributes });
+      scanChat(root);
+      return;
+    }
+    if (pendingChatHosts.has(host)) return;
+    pendingChatHosts.add(host);
+    let attempts = 0;
+    // attachShadow 不产生普通 DOM 变更；仅在聊天组件出现后短暂等待其初始化。
+    const waitForShadow = () => {
+      if (!host.isConnected) return pendingChatHosts.delete(host);
+      if (host.shadowRoot) {
+        pendingChatHosts.delete(host);
+        return watchChatHost(host);
+      }
+      if (++attempts < 80) setTimeout(waitForShadow, 250);
+      else pendingChatHosts.delete(host);
+    };
+    waitForShadow();
   }
 
   scan(document.documentElement);
